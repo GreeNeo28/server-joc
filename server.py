@@ -26,19 +26,19 @@ def save_data(data):
 def home():
     return "Server is ONLINE on Render!"
 
-# Ruta unde jocul trimite scorul si datele ghost-ului
+# Salvarea scorului si a ghost-ului dupa cursă
 @app.route('/scores/put', methods=['GET', 'POST'])
 def report_score():
     data = request.form.to_dict() if request.form else request.args.to_dict()
     if not data and request.json:
         data = request.json
 
-    print(f"[SERVER LOG] Date primite la finalul cursei: {data}")
+    print(f"[SCOR NOU RECEPTIONAT]: {data}")
 
-    level_id = data.get('level_id', 'LevelD80')
+    level_id = data.get('level_id', 'LevelD70')
     user_id = data.get('user_id', 'player_1')
     user_name = data.get('user_name', 'Jucator')
-    race_time = data.get('time', '999999')
+    race_time = data.get('time', '50000')
     shadow = data.get('shadow', '')
 
     all_scores = load_data()
@@ -57,7 +57,6 @@ def report_score():
         "character": data.get('character', '0')
     }
 
-    # Actualizam scorul daca jucatorul exista deja
     existing = [s for s in all_scores[level_id] if s.get('user_id') == user_id]
     if existing:
         existing[0].update(entry)
@@ -66,13 +65,12 @@ def report_score():
 
     save_data(all_scores)
 
-    # status: True este obligatoriu pentru Unity!
     return jsonify({
         "status": True,
         "result": 1
     })
 
-# Ruta de unde jocul cere clasamentul si ghost-urile
+# Trimiterea listei de oponenti catre joc
 @app.route('/scores/level', methods=['GET', 'POST'])
 @app.route('/scores/level_fb', methods=['GET', 'POST'])
 @app.route('/scores/users', methods=['GET', 'POST'])
@@ -84,7 +82,20 @@ def get_scores():
     all_scores = load_data()
     level_scores = all_scores.get(level_id, [])
 
-    # status: True deblocheaza afisarea oponentilor in joc!
+    # Daca nu exista niciun ghost salvat pentru acest nivel, generam un bot demo
+    if not level_scores:
+        level_scores = [{
+            "id": "bot_101",
+            "user_id": "bot_101",
+            "username": "Xtreme_Rider",
+            "name": "Xtreme_Rider",
+            "time": "42100",
+            "score": "42100",
+            "bike": "0",
+            "character": "0",
+            "shadow": ""
+        }]
+
     return jsonify({
         "status": True,
         "result": level_scores,
