@@ -26,67 +26,69 @@ def save_data(data):
 def home():
     return "Server is ONLINE on Render!"
 
-# Salvarea scorului si a ghost-ului (shadow) la finalul cursei
-@app.route('/scores/put', methods=['POST'])
+# Ruta unde jocul trimite scorul si datele ghost-ului
+@app.route('/scores/put', methods=['GET', 'POST'])
 def report_score():
-    data = request.form if request.form else request.json or {}
-    
-    level_id = data.get('level_id', 'default')
+    data = request.form.to_dict() if request.form else request.args.to_dict()
+    if not data and request.json:
+        data = request.json
+
+    print(f"[SERVER LOG] Date primite la finalul cursei: {data}")
+
+    level_id = data.get('level_id', 'LevelD80')
     user_id = data.get('user_id', 'player_1')
     user_name = data.get('user_name', 'Jucator')
     race_time = data.get('time', '999999')
-    points = data.get('points', '0')
     shadow = data.get('shadow', '')
-    bike = data.get('bike', '0')
-    character = data.get('character', '0')
 
     all_scores = load_data()
     if level_id not in all_scores:
         all_scores[level_id] = []
 
-    # Cream obiectul cu datele jucatorului si ghost-ul
     entry = {
         "id": user_id,
         "user_id": user_id,
         "username": user_name,
         "name": user_name,
         "time": race_time,
-        "points": points,
+        "score": race_time,
         "shadow": shadow,
-        "bike": bike,
-        "character": character
+        "bike": data.get('bike', '0'),
+        "character": data.get('character', '0')
     }
 
-    # Daca jucatorul exista deja pe acest nivel, ii actualizam timpul
+    # Actualizam scorul daca jucatorul exista deja
     existing = [s for s in all_scores[level_id] if s.get('user_id') == user_id]
     if existing:
         existing[0].update(entry)
     else:
         all_scores[level_id].append(entry)
 
-    # Sortam timpii (cel mai mic timp primul)
-    try:
-        all_scores[level_id].sort(key=lambda x: int(x.get('time', 999999)))
-    except Exception:
-        pass
-
     save_data(all_scores)
-    print(f"[SUCCESS] Scor si Ghost salvat pentru nivelul {level_id} de catre {user_name}")
 
-    return jsonify({"result": 1})
+    # status: True este obligatoriu pentru Unity!
+    return jsonify({
+        "status": True,
+        "result": 1
+    })
 
-# Returnarea scorurilor si ghost-urilor catre joc
-@app.route('/scores/level', methods=['GET'])
-@app.route('/scores/level_fb', methods=['GET'])
-@app.route('/scores/users', methods=['GET'])
+# Ruta de unde jocul cere clasamentul si ghost-urile
+@app.route('/scores/level', methods=['GET', 'POST'])
+@app.route('/scores/level_fb', methods=['GET', 'POST'])
+@app.route('/scores/users', methods=['GET', 'POST'])
 def get_scores():
     level_id = request.args.get('level_id', '')
+    if not level_id and request.form:
+        level_id = request.form.get('level_id', '')
+
     all_scores = load_data()
-    
     level_scores = all_scores.get(level_id, [])
 
+    # status: True deblocheaza afisarea oponentilor in joc!
     return jsonify({
+        "status": True,
         "result": level_scores,
+        "data": level_scores,
         "position": 1
     })
 
