@@ -20,32 +20,32 @@ def save_data(data):
 
 @app.route('/')
 def home():
-    return "Trial Xtreme 3 Server is UP and Running!"
+    return "Server is LIVE!"
 
-# 1. AUTENTIFICARE: Cand jocul porneste, cere datele contului. Ii dam un profil valid ca sa deblocheze salvarea!
-@app.route('/users/<path:path>', methods=['GET', 'POST'])
-def users_handler(path):
+# 1. RUTA CHEIE PENTRU AUTENTIFICARE: Aici reparam problema cu "user_id=" gol!
+@app.route('/scores/users', methods=['GET', 'POST'])
+def get_users():
+    # Indiferent ce cere jocul, ii returnam un profil valid ca sa stie ca existam
     return jsonify({
         "status": True,
-        "result": {
-            "id": "my_player_1",
-            "user_id": "my_player_1",
-            "name": "Jucatorul_Meu",
-            "username": "Jucatorul_Meu"
-        }
+        "result": [
+            {
+                "id": "player_xtreme_007",
+                "user_id": "player_xtreme_007",
+                "name": "Xtreme Pro",
+                "username": "Xtreme Pro",
+                "country": "RO"
+            }
+        ]
     })
 
-# 2. DESCARCARE GHOST: Cand dai Play pe un oponent, jocul cere shadow-ul aici.
+# 2. DESCARCARE GHOST
 @app.route('/scores/get', methods=['GET', 'POST'])
 def get_shadow():
-    req_id = request.args.get('id')
-    if not req_id and request.form:
-        req_id = request.form.get('id')
-        
+    req_id = request.args.get('id') or request.form.get('id', '')
     all_scores = load_data()
     found_shadow = ""
     
-    # Cautam shadow-ul in baza noastra de date
     for level, scores in all_scores.items():
         for s in scores:
             if str(s.get('id')) == str(req_id) or str(s.get('user_id')) == str(req_id):
@@ -54,31 +54,35 @@ def get_shadow():
         if found_shadow:
             break
 
-    # Jocul asteapta strict string-ul ghost-ului in campul "result"
     return jsonify({
         "status": True,
         "result": found_shadow,
         "shadow": found_shadow
     })
 
-# 3. SALVARE SCOR: Cand treci linia de sosire
+# 3. SALVARE SCOR SI GHOST
 @app.route('/scores/put', methods=['GET', 'POST'])
 def put_score():
     data = request.form.to_dict() if request.form else request.args.to_dict()
     if not data and request.json:
         data = request.json
         
+    print(f"\n[!!! SCOR NOU PRIMIT !!!] Date: {data}")
+        
     level_id = data.get('level_id')
     if not level_id:
         return jsonify({"status": False})
         
-    user_id = data.get('user_id', 'my_player_1')
+    # Folosim ID-ul fortat de noi daca jocul tot nu trimite unul
+    user_id = data.get('user_id')
+    if not user_id or user_id == '':
+        user_id = "player_xtreme_007"
     
     entry = {
         "id": user_id,
         "user_id": user_id,
-        "name": data.get('user_name', data.get('name', 'Jucatorul_Meu')),
-        "username": data.get('user_name', data.get('name', 'Jucatorul_Meu')),
+        "name": data.get('user_name', data.get('name', 'Xtreme Pro')),
+        "username": data.get('user_name', data.get('name', 'Xtreme Pro')),
         "time": str(data.get('time', data.get('score', '999999'))),
         "score": str(data.get('time', data.get('score', '999999'))),
         "shadow": data.get('shadow', ''),
@@ -91,32 +95,23 @@ def put_score():
     if level_id not in all_scores:
         all_scores[level_id] = []
         
-    # Stergem scorul vechi al acestui jucator (ca sa pastram doar the best run)
     all_scores[level_id] = [s for s in all_scores[level_id] if s.get('user_id') != user_id]
     all_scores[level_id].append(entry)
-    
-    # Sortam timpii crescator (timp mic = mai bun)
     all_scores[level_id] = sorted(all_scores[level_id], key=lambda x: int(x.get('time', 999999)))
     
     save_data(all_scores)
-    print(f"--> [SUCCES] Am salvat cursa lui {user_id} pe nivelul {level_id}!")
     
     return jsonify({"status": True, "result": 1})
 
-# 4. INCARCARE CLASAMENT: Trimitem oponentii salvati pentru nivelul curent
-@app.route('/scores/<path:path>', methods=['GET', 'POST'])
-def get_scores(path):
-    if path in ['put', 'get']:
-        return jsonify({"status": True}) 
-        
-    level_id = request.args.get('level_id')
-    if not level_id and request.form:
-        level_id = request.form.get('level_id')
+# 4. INCARCARE CLASAMENT PE NIVEL
+@app.route('/scores/level', methods=['GET', 'POST'])
+@app.route('/scores/level_fb', methods=['GET', 'POST'])
+def get_scores_level():
+    level_id = request.args.get('level_id') or request.form.get('level_id', '')
         
     all_scores = load_data()
     level_scores = all_scores.get(level_id, [])
     
-    # Recalculam rank-ul bazat pe pozitia in lista sortata
     for index, score in enumerate(level_scores):
         score['rank'] = index + 1
         
@@ -126,9 +121,10 @@ def get_scores(path):
         "position": 1
     })
 
-# CATCH-ALL pt siguranta: Raspundem cu OK la orice alta ruta neprevazuta
+# CATCH-ALL
 @app.route('/<path:path>', methods=['GET', 'POST', 'PUT'])
 def catch_all(path):
+    print(f"[CATCH-ALL] S-a cerut ruta: /{path}")
     return jsonify({"status": True, "result": 1})
 
 if __name__ == '__main__':
