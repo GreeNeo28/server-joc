@@ -26,81 +26,87 @@ def save_data(data):
 def home():
     return "Server is ONLINE on Render!"
 
-# Salvarea scorului si a ghost-ului dupa cursă
-@app.route('/scores/put', methods=['GET', 'POST'])
-def report_score():
+# Catch-all: raspunde la absolut orice ruta ceruta de joc
+@app.route('/<path:path>', methods=['GET', 'POST', 'PUT'])
+def catch_all(path):
     data = request.form.to_dict() if request.form else request.args.to_dict()
     if not data and request.json:
         data = request.json
+        
+    print(f"\n[CERERE NOUA] Route: /{path} | Metoda: {request.method}")
+    print(f"Date primite: {data}")
 
-    print(f"[SCOR NOU RECEPTIONAT]: {data}")
-
-    level_id = data.get('level_id', 'LevelD70')
-    user_id = data.get('user_id', 'player_1')
-    user_name = data.get('user_name', 'Jucator')
-    race_time = data.get('time', '50000')
-    shadow = data.get('shadow', '')
+    level_id = data.get('level_id') or request.args.get('level_id') or 'LevelD70'
+    
+    # Asiguram un user_id valid pentru joc
+    user_id = data.get('user_id') or request.args.get('user_id')
+    if not user_id or user_id == '':
+        user_id = '10001'
 
     all_scores = load_data()
-    if level_id not in all_scores:
-        all_scores[level_id] = []
 
-    entry = {
-        "id": user_id,
-        "user_id": user_id,
-        "username": user_name,
-        "name": user_name,
-        "time": race_time,
-        "score": race_time,
-        "shadow": shadow,
-        "bike": data.get('bike', '0'),
-        "character": data.get('character', '0')
-    }
-
-    existing = [s for s in all_scores[level_id] if s.get('user_id') == user_id]
-    if existing:
-        existing[0].update(entry)
-    else:
+    # Daca jocul salveaza un scor
+    if 'put' in path or 'save' in path or request.method == 'POST':
+        race_time = data.get('time') or data.get('score') or '45000'
+        shadow = data.get('shadow', '')
+        user_name = data.get('user_name') or data.get('name') or 'Jucator_1'
+        
+        if level_id not in all_scores:
+            all_scores[level_id] = []
+        
+        entry = {
+            "id": user_id,
+            "user_id": user_id,
+            "username": user_name,
+            "name": user_name,
+            "time": str(race_time),
+            "score": str(race_time),
+            "shadow": shadow,
+            "bike": str(data.get('bike', '0')),
+            "character": str(data.get('character', '0')),
+            "rank": 1
+        }
+        
+        # Actualizam scorul existent
+        all_scores[level_id] = [s for s in all_scores[level_id] if s.get('user_id') != user_id]
         all_scores[level_id].append(entry)
+        save_data(all_scores)
+        print(f"--> [SCOR SALVAT CU SUCCES!] Nivel: {level_id} | Timp: {race_time}")
+        
+        return jsonify({
+            "status": True,
+            "result": 1,
+            "user_id": user_id
+        })
 
-    save_data(all_scores)
-
-    return jsonify({
-        "status": True,
-        "result": 1
-    })
-
-# Trimiterea listei de oponenti catre joc
-@app.route('/scores/level', methods=['GET', 'POST'])
-@app.route('/scores/level_fb', methods=['GET', 'POST'])
-@app.route('/scores/users', methods=['GET', 'POST'])
-def get_scores():
-    level_id = request.args.get('level_id', '')
-    if not level_id and request.form:
-        level_id = request.form.get('level_id', '')
-
-    all_scores = load_data()
+    # Daca jocul cere lista de scoruri / world scores
     level_scores = all_scores.get(level_id, [])
 
-    # Daca nu exista niciun ghost salvat pentru acest nivel, generam un bot demo
+    # Daca baza de date e goala, punem un profil demo ca sa se populeze trofeele si garajul
     if not level_scores:
-        level_scores = [{
-            "id": "bot_101",
-            "user_id": "bot_101",
-            "username": "Xtreme_Rider",
-            "name": "Xtreme_Rider",
-            "time": "42100",
-            "score": "42100",
-            "bike": "0",
-            "character": "0",
-            "shadow": ""
-        }]
+        level_scores = [
+            {
+                "id": "10001",
+                "user_id": "10001",
+                "username": "Xtreme_Rider",
+                "name": "Xtreme_Rider",
+                "time": "41200",
+                "score": "41200",
+                "bike": "0",
+                "character": "0",
+                "shadow": "",
+                "rank": 1
+            }
+        ]
 
     return jsonify({
         "status": True,
+        "status_code": 200,
         "result": level_scores,
         "data": level_scores,
-        "position": 1
+        "scores": level_scores,
+        "position": 1,
+        "user_id": user_id
     })
 
 if __name__ == '__main__':
